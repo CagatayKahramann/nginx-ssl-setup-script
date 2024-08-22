@@ -18,9 +18,9 @@ Let's get started!
 4. [Usage](#usage)
 5. [Disclaimer](#disclaimer)
 6. [Troubleshooting](#troubleshooting)
-7. [License](#license)
-8. [Contributing](#contributing)
-9. [Contact](#contact)
+7. [Contributing](#contributing)
+8. [Contact](#contact)
+9. [License](#license)
 
 ## Requirements
 
@@ -162,10 +162,10 @@ Please ensure your pull request adheres to the following guidelines:
 
 Thank you for your contribution!
 
-## License
-
-This script is provided under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for more details.
-
 ## Contact
 
 For any questions or support, please contact cagatay.kahraman@hotmail.com.
+
+## License
+
+This script is provided under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for more details.
