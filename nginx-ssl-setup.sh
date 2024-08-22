@@ -30,19 +30,70 @@ sleep 2
 check_tools() {
     # Check if Nginx is installed
     if ! command -v nginx &> /dev/null; then
-        echo "Nginx is not installed on your system. Please install Nginx using your package manager (e.g., apt-get install nginx on Debian-based systems) and rerun the script."
-        exit 1
+        install_and_enable_tool "Nginx" "apt-get install nginx" "systemctl enable nginx"
     fi
 
     # Check if OpenSSL is installed
     if ! command -v openssl &> /dev/null; then
-        echo "OpenSSL is not installed on your system. Please install OpenSSL using your package manager (e.g., apt-get install openssl) and rerun the script."
+        install_and_enable_tool "OpenSSL" "apt-get install openssl"
         exit 1
     fi
 
     # Check if Curl is installed
     if ! command -v curl &> /dev/null; then
-        echo "Curl is not installed on your system. Please install Curl using your package manager (e.g., apt-get install curl) and rerun the script."
+        install_and_enable_tool "Curl" "apt-get install curl"
+        exit 1
+    fi
+}
+
+# Function to prompt user for installation and optionally enable a service
+install_and_enable_tool() {
+    local tool_name=$1
+    local install_command=$2
+    local enable_command=$3
+    
+    echo "$tool_name is not installed on your system."
+    echo "Warning: This script requires $tool_name to be installed to function correctly and will exit unless you install it."
+    echo "You will be asked for sudo permissions to install the package if you choose to proceed."
+    echo "Would you like to install $tool_name now? (y/n):"
+    read -e -r install_response
+    echo ""
+
+    install_response_lower=$(echo "$install_response" | tr '[:upper:]' '[:lower:]')
+
+    if [[ "$install_response_lower" == "y" ]]; then
+        sudo apt-get update
+        sudo $install_command
+        if [ $? -ne 0 ]; then
+            echo "Error while installing $tool_name. Exiting."
+            exit 1
+        fi
+
+        if [[ "$tool_name" == "Nginx" ]] && [ -n "$enable_command" ]; then
+            echo "Do you want $tool_name to run when the system starts? (y/n):"
+            read -e -r enable_response
+            echo ""
+
+            enable_response_lower=$(echo "$enable_response" | tr '[:upper:]' '[:lower:]')
+
+            if [[ "$enable_response_lower" == "y" ]]; then
+                sudo $enable_command
+                if [ $? -ne 0 ]; then
+                    echo "Error while enabling $tool_name to run on startup."
+                fi
+            elif [[ "$enable_response_lower" == "n" ]]; then
+                echo "$tool_name will not be enabled to run on startup."
+                echo ""
+            else
+                echo "Invalid input: Please respond with 'y' to enable $tool_name on startup or 'n' to skip."
+                echo "Continuing without enabling $tool_name to run on startup."
+            fi
+        fi
+    elif [[ "$install_response_lower" == "n" ]]; then
+        echo "$tool_name is required for this script to work. Exiting."
+        exit 1
+    else
+        echo "Invalid input: Please respond with 'y' to install $tool_name or 'n' to exit."
         exit 1
     fi
 }
