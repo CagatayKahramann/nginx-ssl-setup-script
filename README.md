@@ -151,10 +151,6 @@ This script is provided for educational purposes only. While it automates the pr
      ```
      Review the browser's network traffic to confirm that the redirect is occurring.
 
-## License
-
-This script is provided under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for more details.
-
 ## Contributing
 
 Contributions to this script are greatly appreciated! If you have suggestions, improvements, or bug fixes, please feel free to fork the repository and submit a pull request.
@@ -165,6 +161,10 @@ Please ensure your pull request adheres to the following guidelines:
 - **Clear Description:** Provide a clear description of what your pull request does and why it is needed.
 
 Thank you for your contribution!
+
+## License
+
+This script is provided under the GNU General Public License v3.0. See the [LICENSE](./LICENSE) file for more details.
 
 ## Contact
 
