@@ -66,12 +66,10 @@ cd ssl-setup-script
 ```
 2. **Make the Script Executable**:
 ```bash
-git clone https://github.com/CagatayKahramann/ssl-setup-script.git
-cd ssl-setup-script
+chmod +x ssl-setup.sh
 ```
 3. **Execute the Script**:
 ```bash
-git clone https://github.com/CagatayKahramann/ssl-setup-script.git
 ./ssl-setup.sh
 ```
 4. **Follow the On-screen Prompts**: 
