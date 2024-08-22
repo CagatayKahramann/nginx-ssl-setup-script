@@ -2,7 +2,7 @@
 
 This script will help you generate a self-signed SSL certificate and configure Nginx with it.
 
-You will be prompted to enter your domain name, the path to save the certificate files, the expiration period for the certificate, and whether you want 301 redirection or not.
+You will be prompted to enter your domain name, the path to save the certificate files, the expiration period for the certificate, the ip address and the port you want to forward, whether you want 301 redirection or not, and finally whether you want to test the configuration or not.
 
 **Note:** Self-signed certificates are useful for development and testing but are not trusted by browsers in production environments. For production use, consider using a certificate from a recognized certificate authority like Let's Encrypt.
 
