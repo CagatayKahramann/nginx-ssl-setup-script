@@ -61,16 +61,16 @@ The script includes a rollback functionality in case of errors during certificat
 
 1. **Clone the Repository**:
 ```bash
-git clone https://github.com/CagatayKahramann/ssl-setup-script.git
-cd ssl-setup-script
+git clone https://github.com/CagatayKahramann/nginx-ssl-setup-script.git
+cd nginx-ssl-setup-script
 ```
 2. **Make the Script Executable**:
 ```bash
-chmod +x ssl-setup.sh
+chmod +x nginx-ssl-setup.sh
 ```
 3. **Execute the Script**:
 ```bash
-./ssl-setup.sh
+./nginx-ssl-setup.sh
 ```
 4. **Follow the On-screen Prompts**: 
 The script will guide you through the following steps and will need you to enter the necessary information:
