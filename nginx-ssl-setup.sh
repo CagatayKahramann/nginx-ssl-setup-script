@@ -16,6 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# Global variables
+key_file=""
+crt_file=""
+
 # Welcome message
 echo "Welcome to the SSL Certificate Setup Script!"
 echo "This script will help you generate a self-signed SSL certificate and configure Nginx with it."
@@ -30,21 +34,74 @@ sleep 2
 check_tools() {
     # Check if Nginx is installed
     if ! command -v nginx &> /dev/null; then
-        echo "Nginx is not installed on your system. Please install Nginx using your package manager (e.g., apt-get install nginx on Debian-based systems) and rerun the script."
-        exit 1
+        install_and_enable_tool "Nginx" "apt-get install nginx" "systemctl enable nginx"
     fi
 
     # Check if OpenSSL is installed
     if ! command -v openssl &> /dev/null; then
-        echo "OpenSSL is not installed on your system. Please install OpenSSL using your package manager (e.g., apt-get install openssl) and rerun the script."
+        install_and_enable_tool "OpenSSL" "apt-get install openssl"
         exit 1
     fi
 
     # Check if Curl is installed
     if ! command -v curl &> /dev/null; then
-        echo "Curl is not installed on your system. Please install Curl using your package manager (e.g., apt-get install curl) and rerun the script."
+        install_and_enable_tool "Curl" "apt-get install curl"
         exit 1
     fi
+}
+
+# Function to prompt user for installation and optionally enable a service
+install_and_enable_tool() {
+    local tool_name=$1
+    local install_command=$2
+    local enable_command=$3
+    
+    echo "$tool_name is not installed on your system."
+    echo "Warning: This script requires $tool_name to be installed to function correctly and will exit unless you install it."
+    echo "You may be asked for sudo permissions to install the package if you choose to proceed."
+    echo "Would you like to install $tool_name now? (y/n):"
+    read -e -r install_response
+    echo ""
+
+    install_response_lower=$(echo "$install_response" | tr '[:upper:]' '[:lower:]')
+
+    if [[ "$install_response_lower" == "y" ]]; then
+        sudo apt-get update
+        sudo $install_command
+        if [ $? -ne 0 ]; then
+            echo "Error while installing $tool_name. Exiting."
+            exit 1
+        fi
+
+        if [[ "$tool_name" == "Nginx" ]] && [ -n "$enable_command" ]; then
+            echo ""
+            echo "Do you want $tool_name to run when the system starts? (y/n):"
+            read -e -r enable_response
+            echo ""
+
+            enable_response_lower=$(echo "$enable_response" | tr '[:upper:]' '[:lower:]')
+
+            if [[ "$enable_response_lower" == "y" ]]; then
+                sudo $enable_command
+                if [ $? -ne 0 ]; then
+                    echo "Error while enabling $tool_name to run on startup."
+                fi
+            elif [[ "$enable_response_lower" == "n" ]]; then
+                echo "$tool_name will not be enabled to run on startup."
+                echo ""
+            else
+                echo "Invalid input: Please respond with 'y' to enable $tool_name on startup or 'n' to skip."
+                echo "Continuing without enabling $tool_name to run on startup."
+            fi
+        fi
+    elif [[ "$install_response_lower" == "n" ]]; then
+        echo "$tool_name is required for this script to function correctly. Exiting."
+        exit 1
+    else
+        echo "Invalid input: Please respond with 'y' to install $tool_name or 'n' to exit."
+        exit 1
+    fi
+    echo ""
 }
 
 # Function to validate and create user path
@@ -112,60 +169,82 @@ validate_domain_name() {
 
 # Function to handle rollback with user interactions
 rollback() {
-    local cert_path=$1
-
-    echo "Rolling back changes..."
     echo ""
-    sleep 0.5
+    echo "Script interrupted because of an error. Would you like to rollback the changes made by the script? (y/n)"
+    read -e -r rollback_answer
+    echo ""
 
-    # Check if any backup of config exists
-    local backup_file=$(ls /etc/nginx/sites-available/*.conf.bak-* 2>/dev/null | sort -r | head -n 1)
+    rollback_answer_lower=$(echo "$rollback_answer" | tr '[:upper:]' '[:lower:]')
 
-    if [ -n "$backup_file" ]; then
-        echo "Backup file found at $backup_file."
-        echo "Do you want to restore the backup? (y/n):"
-        read -e -r restore_answer
+    if [[ "$rollback_answer_lower" == "y" ]]; then
+        echo "Rolling back changes..."
+        echo ""
+        sleep 0.5
 
-        restore_answer_lower=$(echo "$restore_answer" | tr '[:upper:]' '[:lower:]')
+        # Check if any backup of config exists
+        local backup_file=$(ls /etc/nginx/sites-available/*.conf.bak-* 2>/dev/null | sort -r | head -n 1)
 
-        if [[ "$restore_answer_lower" == "y" ]]; then
-            local conf_file="${backup_file%.bak-*}"
-            sudo cp "$backup_file" "$conf_file"
-            if [ $? -eq 0 ]; then
-                echo "Configuration file restored from backup."
+        if [ -n "$backup_file" ]; then
+            echo "Backup file found at $backup_file."
+            echo "Do you want to restore the backup? (y/n):"
+            read -e -r restore_answer
+
+            restore_answer_lower=$(echo "$restore_answer" | tr '[:upper:]' '[:lower:]')
+
+            if [[ "$restore_answer_lower" == "y" ]]; then
+                local conf_file="${backup_file%.bak-*}"
+                sudo cp "$backup_file" "$conf_file"
+                if [ $? -eq 0 ]; then
+                    echo "Configuration file restored from backup."
+                else
+                    echo "Error restoring configuration file from backup."
+                fi
+            elif [[ "$restore_answer_lower" == "n" ]]; then
+                echo "Backup not restored. Manual intervention might be required."
             else
-                echo "Error restoring configuration file from backup."
+                echo "Invalid input: Please enter 'y' for yes or 'n' for no."
+                exit 1
             fi
-        elif [[ "$restore_answer_lower" == "n" ]]; then
-            echo "Backup not restored. Manual intervention might be required."
         else
-            echo "Invalid input: Please enter 'y' for yes or 'n' for no."
-            exit 1
+            echo "No backup file found. No rollback performed."
         fi
-    else
-        echo "No backup file found. No rollback performed."
-    fi
-    sleep 0.5
+        sleep 0.5
 
-    # Remove the generated certificates if they exist
-    if [ -d "$cert_path" ]; then
-        echo "Removing generated certificate files from $cert_path..."
-        rm -rf "$cert_path"
-        if [ $? -eq 0 ]; then
-            echo "Certificate files removed successfully."
-            echo ""
-        else
-            echo "Failed to remove certificate files from $cert_path. Please check your permissions and try again."
-            echo ""
+        # Remove the generated certificates if they exist
+        if [ -f "$key_file" ]; then
+            echo "Removing generated key file: $key_file..."
+            rm -f "$key_file"
+            if [ $? -eq 0 ]; then
+                echo "Key file removed successfully."
+            else
+                echo "Error: Couldn't remove key file."
+            fi
         fi
+
+        if [ -f "$crt_file" ]; then
+            echo "Removing generated certificate file: $crt_file..."
+            rm -f "$crt_file"
+            if [ $? -eq 0 ]; then
+                echo "Certificate file removed successfully."
+            else
+                echo "Error: Couldn't remove certificate file."
+            fi
+        fi
+        sleep 0.5
+    elif [[ "$rollback_answer_lower" == "n" ]]; then
+        echo "Rollback cancelled. No changes have been reverted."
+    else
+        echo "Invalid input: Please enter 'y' for yes or 'n' for no."
+        exit 1
     fi
-    sleep 0.5
+
+    echo ""
+    echo "Exiting..." 
+    exit 1
 }
 
 # Function to handle script interruptions quickly
 cleanup() {
-    local cert_path=$1
-
     echo "Script interrupted. Performing cleanup..."
     echo ""
     sleep 0.5
@@ -187,42 +266,48 @@ cleanup() {
         echo "No backup file found. Proceeding with cleanup..."
     fi
 
+
     # Remove the generated certificates if they exist
-    if [ -d "$cert_path" ]; then
-        echo "Removing generated certificate files from $cert_path..."
-        rm -rf "$cert_path"
+    if [ -f "$key_file" ]; then
+        echo "Removing generated key file: $key_file..."
+        rm -f "$key_file"
         if [ $? -eq 0 ]; then
-            echo "Certificate files removed successfully."
+            echo "Key file removed successfully."
         else
-            echo "Error: Couldn't remove certificate files."
+            echo "Error: Couldn't remove key file."
         fi
     fi
 
-    echo "Cleanup completed."
-    echo ""
+    if [ -f "$crt_file" ]; then
+        echo "Removing generated certificate file: $crt_file..."
+        rm -f "$crt_file"
+        if [ $? -eq 0 ]; then
+            echo "Certificate file removed successfully."
+        else
+            echo "Error: Couldn't remove certificate file."
+        fi
+    fi
+
+    echo "Cleanup completed. Exiting."
     exit 1
 }
 
 # Set up a trap to catch interruptions and call the wrapper
-cleanup_wrapper() {
-    cleanup "$cert_path"
-}
-trap cleanup_wrapper SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM
 
 # Function to generate a self-signed SSL certificate
 generate_certificate() {
-    local domain_name=$1
-    local cert_path=$2
-    local days=$3
+    local days=$1
+    local domain_name=$2
 
     echo "Checking for existing SSL certificate files at $cert_path..."
     echo ""
     sleep 0.5
     
-    if [ -f "$cert_path/$domain_name.crt" ] || [ -f "$cert_path/$domain_name.key" ]; then
+    if [ -f "$crt_file" ] || [ -f "$key_file" ]; then
         echo "Existing SSL certificate files found:"
-        echo "- $cert_path/$domain_name.crt"
-        echo "- $cert_path/$domain_name.key"
+        echo "- $crt_file"
+        echo "- $key_file"
         echo ""
         
         echo "Do you want to overwrite these files? (y/n):"
@@ -245,19 +330,19 @@ generate_certificate() {
     fi
 
     echo "Generating private key for $domain_name..."
-    openssl genrsa -out "$cert_path/$domain_name.key" 2048
+    openssl genrsa -out "$key_file" 2048
     if [ $? -ne 0 ]; then
         echo "Error while generating private key. Exiting."
-        rollback "$cert_path"
+        rollback
         exit 1
     fi
     sleep 0.5
 
     echo "Generating self-signed SSL certificate for $domain_name with $days days validity..."
-    openssl req -new -x509 -nodes -days $days -key "$cert_path/$domain_name.key" -out "$cert_path/$domain_name.crt" -subj "/CN=$domain_name"
+    openssl req -new -x509 -nodes -days $days -key "$key_file" -out "$crt_file" -subj "/CN=$domain_name"
     if [ $? -ne 0 ]; then
         echo "Error while generating certificate. Exiting."
-        rollback "$cert_path"
+        rollback
         exit 1
     fi
     sleep 0.5
@@ -270,10 +355,9 @@ generate_certificate() {
 # Function to create a domain-specific Nginx configuration file
 create_nginx_conf() {
     local domain_name=$1
-    local cert_path=$2
-    local ssl_redirect=$3
-    local forward_ip=$4
-    local forward_port=$5
+    local ssl_redirect=$2
+    local forward_ip=$3
+    local forward_port=$4
 
     local conf_file="/etc/nginx/sites-available/${domain_name}.conf"
     local symlink="/etc/nginx/sites-enabled/${domain_name}.conf"
@@ -289,22 +373,23 @@ create_nginx_conf() {
         overwrite_answer_lower=$(echo "$overwrite_answer" | tr '[:upper:]' '[:lower:]')
 
         if [[ "$overwrite_answer_lower" == "y" ]]; then
-            local backup_file="${conf_file}-backup-$(date +%F_%T)"
+            local backup_file="${conf_file}.bak-$(date +%F_%T)"
             sudo cp "$conf_file" "$backup_file"
             if [ $? -eq 0 ]; then
                 echo "Backup created at $backup_file."
                 echo ""
             else
                 echo "Failed to create backup. Please check your permissions."
-                rollback "$cert_path"
-                exit 1
+                echo "Continuing without creating a backup."
+                echo ""
             fi
         elif [[ "$overwrite_answer_lower" == "n" ]]; then
             echo "Proceeding without backup. The existing file will be overwritten."
             echo ""
         else
             echo "Invalid input: Please enter 'y' for yes or 'n' for no."
-            exit 1
+            echo "Continuing without creating a backup." 
+            echo ""
         fi
     fi
     sleep 0.5
@@ -345,8 +430,8 @@ server {
     listen [::]:443 ssl;
     server_name $domain_name;
 
-    ssl_certificate $cert_path/$domain_name.crt;
-    ssl_certificate_key $cert_path/$domain_name.key;
+    ssl_certificate $crt_file;
+    ssl_certificate_key $key_file;
 
     location / {
         proxy_pass http://$forward_ip:$forward_port;
@@ -363,7 +448,7 @@ server {
 
     if [ $? -ne 0 ]; then
         echo "Failed to create Nginx configuration file at $conf_file. Please ensure you have the necessary permissions and try again."
-        rollback "$cert_path"
+        rollback
         exit 1
     fi
 
@@ -377,7 +462,7 @@ server {
         sudo rm "$symlink"
         if [ $? -ne 0 ]; then
             echo "Unable to remove the existing symbolic link at $symlink. Please check permissions and ensure no other processes are using the file."
-            rollback "$cert_path"
+            rollback
             exit 1
         fi
     fi
@@ -388,7 +473,7 @@ server {
     sudo ln -sfn "$conf_file" "$symlink"
     if [ $? -ne 0 ]; then
         echo "Failed to create symbolic link in /etc/nginx/sites-enabled/. Verify that you have the necessary permissions and that the directory is writable."
-        rollback "$cert_path"
+        rollback
         exit 1
     fi
 
@@ -408,7 +493,8 @@ server {
         echo ""
     else
         echo "Unable to restart Nginx. Please check the configuration and restart Nginx manually using sudo systemctl restart nginx to apply the changes."
-        exit 1
+        echo "Continuing without restarting nginx."
+        echo ""
     fi
     sleep 0.5
 }
@@ -464,6 +550,9 @@ echo ""
 validate_cert_path "$cert_path"
 sleep 0.2
 
+key_file="$cert_path/$domain_name.key"
+crt_file="$cert_path/$domain_name.crt"
+
 echo "Enter the number of days until the certificate expires (between 1 and 365):"
 read -e -r expiration_days
 echo ""
@@ -477,7 +566,7 @@ fi
 sleep 0.2
 
 # Generate certificate.
-generate_certificate "$domain_name" "$cert_path" "$expiration_days"
+generate_certificate "$expiration_days" "$domain_name"
 sleep 0.2
 
 echo "Enter the IP address to forward traffic to:"
@@ -485,6 +574,7 @@ read -e -r forward_ip
 echo ""
 if [[ ! "$forward_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "Invalid IP address format. Please enter a valid IP address."
+    rollback
     exit 1
 fi
 sleep 0.2
@@ -494,6 +584,7 @@ read -e -r forward_port
 echo ""
 if [[ ! "$forward_port" =~ ^[0-9]+$ ]] || [[ "$forward_port" -lt 1 || "$forward_port" -gt 65535 ]]; then
     echo "Invalid port number. Please enter a number between 1 and 65535."
+    rollback
     exit 1
 fi
 sleep 0.2
@@ -510,12 +601,13 @@ elif [[ "$ssl_redirect_answer_lower" == "n" ]]; then
   ssl_redirect=false
 else
   echo "Invalid input: Please enter 'y' for yes or 'n' for no."
+  rollback
   exit 1
 fi
 sleep 0.2
 
 # Create Nginx config
-create_nginx_conf "$domain_name" "$cert_path" "$ssl_redirect" "$forward_ip" "$forward_port"
+create_nginx_conf "$domain_name" "$ssl_redirect" "$forward_ip" "$forward_port"
 sleep 0.2
 
 echo "Would you like to test the connection to the IP address and port you configured? (y/n):"
@@ -531,7 +623,7 @@ elif [[ "$test_ip_port_answer_lower" == "n" ]]; then
     echo "IP and port testing skipped. The configuration has been applied."
 else
     echo "Invalid input: Please enter 'y' for yes or 'n' for no."
-    exit 1
+    echo "Continuing without the IP address connection test."
 fi
 sleep 0.2
 
